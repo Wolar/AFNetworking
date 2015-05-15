@@ -156,6 +156,7 @@ static id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingO
 
 - (id)responseObjectForResponse:(NSURLResponse *)response
                            data:(NSData *)data
+        serializationParameters:(IMTResponseSerializationParameters*)parameters
                           error:(NSError *__autoreleasing *)error
 {
     [self validateResponse:(NSHTTPURLResponse *)response data:data error:error];
@@ -228,6 +229,7 @@ static id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingO
 
 - (id)responseObjectForResponse:(NSURLResponse *)response
                            data:(NSData *)data
+        serializationParameters:(IMTResponseSerializationParameters*)parameters
                           error:(NSError *__autoreleasing *)error
 {
     if (![self validateResponse:(NSHTTPURLResponse *)response data:data error:error]) {
@@ -341,6 +343,7 @@ static id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingO
 
 - (id)responseObjectForResponse:(NSHTTPURLResponse *)response
                            data:(NSData *)data
+        serializationParameters:(IMTResponseSerializationParameters*)parameters
                           error:(NSError *__autoreleasing *)error
 {
     if (![self validateResponse:(NSHTTPURLResponse *)response data:data error:error]) {
@@ -386,6 +389,7 @@ static id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingO
 
 - (id)responseObjectForResponse:(NSURLResponse *)response
                            data:(NSData *)data
+        serializationParameters:(IMTResponseSerializationParameters*)parameters
                           error:(NSError *__autoreleasing *)error
 {
     if (![self validateResponse:(NSHTTPURLResponse *)response data:data error:error]) {
@@ -469,6 +473,7 @@ static id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingO
 
 - (id)responseObjectForResponse:(NSURLResponse *)response
                            data:(NSData *)data
+        serializationParameters:(IMTResponseSerializationParameters*)parameters
                           error:(NSError *__autoreleasing *)error
 {
     if (![self validateResponse:(NSHTTPURLResponse *)response data:data error:error]) {
@@ -654,6 +659,7 @@ static UIImage * AFInflatedImageFromResponseWithDataAtScale(NSHTTPURLResponse *r
 
 - (id)responseObjectForResponse:(NSURLResponse *)response
                            data:(NSData *)data
+        serializationParameters:(IMTResponseSerializationParameters*)parameters
                           error:(NSError *__autoreleasing *)error
 {
     if (![self validateResponse:(NSHTTPURLResponse *)response data:data error:error]) {
@@ -745,15 +751,16 @@ static UIImage * AFInflatedImageFromResponseWithDataAtScale(NSHTTPURLResponse *r
 
 - (id)responseObjectForResponse:(NSURLResponse *)response
                            data:(NSData *)data
+        serializationParameters:(IMTResponseSerializationParameters*)parameters
                           error:(NSError *__autoreleasing *)error
 {
     for (id <AFURLResponseSerialization> serializer in self.responseSerializers) {
         if (![serializer isKindOfClass:[AFHTTPResponseSerializer class]]) {
             continue;
         }
-
+        
         NSError *serializerError = nil;
-        id responseObject = [serializer responseObjectForResponse:response data:data error:&serializerError];
+        id responseObject = [serializer responseObjectForResponse:response data:data serializationParameters:parameters error:&serializerError];
         if (responseObject) {
             if (error) {
                 *error = AFErrorWithUnderlyingError(serializerError, *error);
@@ -763,7 +770,7 @@ static UIImage * AFInflatedImageFromResponseWithDataAtScale(NSHTTPURLResponse *r
         }
     }
 
-    return [super responseObjectForResponse:response data:data error:error];
+    return [super responseObjectForResponse:response data:data serializationParameters:parameters error:error];
 }
 
 #pragma mark - NSSecureCoding
