@@ -16,6 +16,11 @@
 @interface IMTSessionDataTaskParameters : NSObject
 
 /**
+ Default settings (used for testing now)
+ **/
++(IMTSessionDataTaskParameters*)defaultParameters;
+
+/**
  Containing request object / data and information how serializer should use them
  **/
 @property (nonatomic, strong) IMTRequestSerializationParameters     *requestParameters;

@@ -21,7 +21,6 @@
 
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
-#import "IMTResponseSerializationParameters.h"
 
 /**
  The `AFURLResponseSerialization` protocol is adopted by an object that decodes data into a more useful object representation, according to details in the server response. Response serializers may additionally perform validation on the incoming response and data.
@@ -41,7 +40,7 @@
  */
 - (id)responseObjectForResponse:(NSURLResponse *)response
                            data:(NSData *)data
-        serializationParameters:(IMTResponseSerializationParameters*)parameters
+           processingParameters:(id)parameters
                           error:(NSError *__autoreleasing *)error;
 
 @end

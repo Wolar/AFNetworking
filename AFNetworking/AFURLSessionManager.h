@@ -218,6 +218,7 @@
  @param completionHandler A block object to be executed when the task finishes. This block has no return value and takes three arguments: the server response, the response object created by that serializer, and the error that occurred, if any.
  */
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request
+                         processingParameters:(id)settings
                             completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler;
 
 ///---------------------------
@@ -237,6 +238,7 @@
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
                                          fromFile:(NSURL *)fileURL
                                          progress:(NSProgress * __autoreleasing *)progress
+                             processingParameters:(id)settings
                                 completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler;
 
 /**
@@ -250,6 +252,7 @@
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
                                          fromData:(NSData *)bodyData
                                          progress:(NSProgress * __autoreleasing *)progress
+                             processingParameters:(id)settings
                                 completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler;
 
 /**
@@ -261,6 +264,7 @@
  */
 - (NSURLSessionUploadTask *)uploadTaskWithStreamedRequest:(NSURLRequest *)request
                                                  progress:(NSProgress * __autoreleasing *)progress
+                                     processingParameters:(id)settings
                                         completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler;
 
 ///-----------------------------

@@ -143,31 +143,31 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
 
 - (void)URLSession:(__unused NSURLSession *)session
               task:(NSURLSessionTask *)task
-didCompleteWithError:(NSError *)error
-{
+processingParameters:(id)settings
+didCompleteWithError:(NSError *)error {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wgnu"
     __strong AFURLSessionManager *manager = self.manager;
-
+    
     __block id responseObject = nil;
-
+    
     __block NSMutableDictionary *userInfo = [NSMutableDictionary dictionary];
     userInfo[AFNetworkingTaskDidCompleteResponseSerializerKey] = manager.responseSerializer;
-
+    
     if (self.downloadFileURL) {
         userInfo[AFNetworkingTaskDidCompleteAssetPathKey] = self.downloadFileURL;
     } else if (self.mutableData) {
         userInfo[AFNetworkingTaskDidCompleteResponseDataKey] = [NSData dataWithData:self.mutableData];
     }
-
+    
     if (error) {
         userInfo[AFNetworkingTaskDidCompleteErrorKey] = error;
-
+        
         dispatch_group_async(manager.completionGroup ?: url_session_manager_completion_group(), manager.completionQueue ?: dispatch_get_main_queue(), ^{
             if (self.completionHandler) {
                 self.completionHandler(task.response, responseObject, error);
             }
-
+            
             dispatch_async(dispatch_get_main_queue(), ^{
                 [[NSNotificationCenter defaultCenter] postNotificationName:AFNetworkingTaskDidCompleteNotification object:task userInfo:userInfo];
             });
@@ -175,26 +175,25 @@ didCompleteWithError:(NSError *)error
     } else {
         dispatch_async(url_session_manager_processing_queue(), ^{
             NSError *serializationError = nil;
-#warning Send parameters to the serializer
-            responseObject = [manager.responseSerializer responseObjectForResponse:task.response data:[NSData dataWithData:self.mutableData] serializationParameters:nil error:&serializationError];
-
+            responseObject = [manager.responseSerializer responseObjectForResponse:task.response data:[NSData dataWithData:self.mutableData] processingParameters:settings error:&serializationError];
+            
             if (self.downloadFileURL) {
                 responseObject = self.downloadFileURL;
             }
-
+            
             if (responseObject) {
                 userInfo[AFNetworkingTaskDidCompleteSerializedResponseKey] = responseObject;
             }
-
+            
             if (serializationError) {
                 userInfo[AFNetworkingTaskDidCompleteErrorKey] = serializationError;
             }
-
+            
             dispatch_group_async(manager.completionGroup ?: url_session_manager_completion_group(), manager.completionQueue ?: dispatch_get_main_queue(), ^{
                 if (self.completionHandler) {
                     self.completionHandler(task.response, responseObject, serializationError);
                 }
-
+                
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [[NSNotificationCenter defaultCenter] postNotificationName:AFNetworkingTaskDidCompleteNotification object:task userInfo:userInfo];
                 });
@@ -202,6 +201,13 @@ didCompleteWithError:(NSError *)error
         });
     }
 #pragma clang diagnostic pop
+}
+
+- (void)URLSession:(__unused NSURLSession *)session
+              task:(NSURLSessionTask *)task
+didCompleteWithError:(NSError *)error
+{
+    [self URLSession:session task:task processingParameters:nil didCompleteWithError:error];
 }
 
 #pragma mark - NSURLSessionDataTaskDelegate
@@ -380,6 +386,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 @property (readwrite, nonatomic, strong) NSOperationQueue *operationQueue;
 @property (readwrite, nonatomic, strong) NSURLSession *session;
 @property (readwrite, nonatomic, strong) NSMutableDictionary *mutableTaskDelegatesKeyedByTaskIdentifier;
+@property (readwrite, nonatomic, strong) NSMutableDictionary *mutableTaskProcessingSettingsKeyedByTaskIdentifier;
 @property (readonly, nonatomic, copy) NSString *taskDescriptionForSessionTasks;
 @property (readwrite, nonatomic, strong) NSLock *lock;
 @property (readwrite, nonatomic, copy) AFURLSessionDidBecomeInvalidBlock sessionDidBecomeInvalid;
@@ -429,6 +436,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
     self.reachabilityManager = [AFNetworkReachabilityManager sharedManager];
 
     self.mutableTaskDelegatesKeyedByTaskIdentifier = [[NSMutableDictionary alloc] init];
+    self.mutableTaskProcessingSettingsKeyedByTaskIdentifier = [[NSMutableDictionary alloc] init];
 
     self.lock = [[NSLock alloc] init];
     self.lock.name = AFURLSessionManagerLockName;
@@ -439,7 +447,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
         }
 
         for (NSURLSessionUploadTask *uploadTask in uploadTasks) {
-            [self addDelegateForUploadTask:uploadTask progress:nil completionHandler:nil];
+            [self addDelegateForUploadTask:uploadTask progress:nil processingParameters:nil completionHandler:nil];
         }
 
         for (NSURLSessionDownloadTask *downloadTask in downloadTasks) {
@@ -487,6 +495,30 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 #pragma mark -
 
+//TODO: use locks?
+-(id)processingParametersForTask:(NSURLSessionTask *)task {
+    
+    id settings = self.mutableTaskProcessingSettingsKeyedByTaskIdentifier[@(task.taskIdentifier)];
+    return settings;
+}
+
+-(void)setProcessingParameters:(id)settings
+                       forTask:(NSURLSessionTask *)task {
+    if (settings) {
+        self.mutableTaskProcessingSettingsKeyedByTaskIdentifier[@(task.taskIdentifier)] = settings;
+    }
+}
+
+-(void)removeProcessingSettingsForTask:(NSURLSessionTask *)task {
+     [self.mutableTaskProcessingSettingsKeyedByTaskIdentifier removeObjectForKey:@(task.taskIdentifier)];
+}
+
+-(void)removeAllProcessingSettings {
+    [self.mutableTaskProcessingSettingsKeyedByTaskIdentifier removeAllObjects];
+}
+
+#pragma mark -
+
 - (AFURLSessionManagerTaskDelegate *)delegateForTask:(NSURLSessionTask *)task {
     NSParameterAssert(task);
 
@@ -522,6 +554,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 - (void)addDelegateForUploadTask:(NSURLSessionUploadTask *)uploadTask
                         progress:(NSProgress * __autoreleasing *)progress
+            processingParameters:(id)settings
                completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler
 {
     AFURLSessionManagerTaskDelegate *delegate = [[AFURLSessionManagerTaskDelegate alloc] init];
@@ -556,6 +589,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
     uploadTask.taskDescription = self.taskDescriptionForSessionTasks;
 
     [self setDelegate:delegate forTask:uploadTask];
+    [self setProcessingParameters:settings forTask:uploadTask];
 }
 
 - (void)addDelegateForDownloadTask:(NSURLSessionDownloadTask *)downloadTask
@@ -659,6 +693,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 #pragma mark -
 
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request
+                         processingParameters:(id)settings
                             completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler
 {
     __block NSURLSessionDataTask *dataTask = nil;
@@ -667,7 +702,8 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
     });
 
     [self addDelegateForDataTask:dataTask completionHandler:completionHandler];
-
+    [self setProcessingParameters:settings forTask:dataTask];
+    
     return dataTask;
 }
 
@@ -676,6 +712,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
                                          fromFile:(NSURL *)fileURL
                                          progress:(NSProgress * __autoreleasing *)progress
+                             processingParameters:(id)settings
                                 completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler
 {
     __block NSURLSessionUploadTask *uploadTask = nil;
@@ -689,7 +726,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
         }
     }
 
-    [self addDelegateForUploadTask:uploadTask progress:progress completionHandler:completionHandler];
+    [self addDelegateForUploadTask:uploadTask progress:progress processingParameters:settings completionHandler:completionHandler];
 
     return uploadTask;
 }
@@ -697,6 +734,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
                                          fromData:(NSData *)bodyData
                                          progress:(NSProgress * __autoreleasing *)progress
+                             processingParameters:(id)settings
                                 completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler
 {
     __block NSURLSessionUploadTask *uploadTask = nil;
@@ -704,13 +742,14 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
         uploadTask = [self.session uploadTaskWithRequest:request fromData:bodyData];
     });
 
-    [self addDelegateForUploadTask:uploadTask progress:progress completionHandler:completionHandler];
+    [self addDelegateForUploadTask:uploadTask progress:progress processingParameters:settings completionHandler:completionHandler];
 
     return uploadTask;
 }
 
 - (NSURLSessionUploadTask *)uploadTaskWithStreamedRequest:(NSURLRequest *)request
                                                  progress:(NSProgress * __autoreleasing *)progress
+                                     processingParameters:(id)settings
                                         completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler
 {
     __block NSURLSessionUploadTask *uploadTask = nil;
@@ -718,7 +757,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
         uploadTask = [self.session uploadTaskWithStreamedRequest:request];
     });
 
-    [self addDelegateForUploadTask:uploadTask progress:progress completionHandler:completionHandler];
+    [self addDelegateForUploadTask:uploadTask progress:progress processingParameters:settings completionHandler:completionHandler];
 
     return uploadTask;
 }
@@ -989,10 +1028,12 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
 didCompleteWithError:(NSError *)error
 {
     AFURLSessionManagerTaskDelegate *delegate = [self delegateForTask:task];
-
+    //TODO: set for multipart and other part of this delegate
+    id processingParameters = [self processingParametersForTask:task];
+    
     // delegate may be nil when completing a task in the background
     if (delegate) {
-        [delegate URLSession:session task:task didCompleteWithError:error];
+        [delegate URLSession:session task:task processingParameters:processingParameters didCompleteWithError:error];
 
         [self removeDelegateForTask:task];
     }

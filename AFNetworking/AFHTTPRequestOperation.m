@@ -84,8 +84,7 @@ static dispatch_group_t http_request_operation_completion_group() {
     [self.lock lock];
     if (!_responseObject && [self isFinished] && !self.error) {
         NSError *error = nil;
-#warning Send parameters to the serializer
-        self.responseObject = [self.responseSerializer responseObjectForResponse:self.response data:self.responseData serializationParameters:nil error:&error];
+        self.responseObject = [self.responseSerializer responseObjectForResponse:self.response data:self.responseData processingParameters:nil error:&error];
         if (error) {
             self.responseSerializationError = error;
         }
